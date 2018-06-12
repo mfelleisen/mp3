@@ -1,0 +1,14 @@
+audserver : Example spinning up a new audio 'server' for playback.
+
+$ racket bangers.rkt
+
+---
+
+twoprogs : Run the big bang client/server in two seperate processes initially
+
+$ racket server.rkt &
+$ racket client.rkt
+
+---
+
+Both examples assume the file and.mp3 is in the current directory, and save the result as mash.mp3.
