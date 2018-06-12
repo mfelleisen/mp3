@@ -18,4 +18,4 @@
                (list (make-mail w msg))
                '()))]))
 
-(launch-many-worlds (server))
+(server)
