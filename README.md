@@ -6,6 +6,12 @@ big-bang interface. It also shows how to send mp3 files from a universe
 server to a client program, which uses the prototype mp3 player to render
 the file and request a "judgment" from the listener. 
 
+## Dependency 
+
+The repo depends on Leif A.'s video package (unstable version). Install
+with DrRacket or at the command line with `raco pkg install
+video-unstable`. 
+
 ## Files and Directories 
 
 - prototypes
