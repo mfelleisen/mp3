@@ -9,8 +9,10 @@ the file and request a "judgment" from the listener.
 ## Dependency 
 
 The repo depends on Leif A.'s video package (unstable version). Install
-with DrRacket or at the command line with `raco pkg install
-video-unstable`. 
+with DrRacket or at the command line with 
+```
+raco pkg install video-unstable
+```
 
 ## Files and Directories 
 
