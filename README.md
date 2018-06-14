@@ -17,15 +17,24 @@ raco pkg install video-unstable
 ## Files and Directories 
 
 - prototypes
-  - we-must-deliver-this : this prototype teachpack plays 2 roles. First,
-    it implements and exports the play-sound function students could
-    write. Second, it implements a main function that play-sound runs 
-    as a subprocess. Communication happens via STDIN/OUT. 
+  - we-must-deliver-this : provide a function for playing/pausing an mp3
+    byte string and delivering a string as a response 
 
-    Could we implement this with a thread and simplify communication with events?
+  - our-server : this is a primitive version of our mp3 server 
 
-  - students-can-write-this : this shows how we would write a server and
-    students would write a client 
+  - students-can-write-this : this file shows how students would write an
+    mp3 client that receives a song, plays it, and gets an opinion 
+
+Run as follows from the command line (or in 2 drracket windows): 
+
+```
+$ pwd 
+..../prototypes/
+$ racket our-server.rkt &
+$ racket students-can-write-this.rkt 
+```
+This pops up a server window and two client windows per song. It plays the
+following two. 
 
 - short.mp3: 10s sample mp3
 - long.mp3: 3min sample mp3
