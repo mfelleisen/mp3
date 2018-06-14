@@ -16,8 +16,8 @@ exec /Users/matthias/plt/racket/bin/racket -tm "$0" ${1+"$@"}
 (require 2htdp/image 2htdp/universe)
 
 ;; ---------------------------------------------------------------------------------------------------
-(define DONT "I don't like it")
-(define LIKE "I like it")
+(define DONT #;(scale .33 (bitmap "dont.png")) "I don't like it")
+(define LIKE #;(scale .33 (bitmap "like.png")) "I like it")
 (define DONE "song completed")
 
 ;; type State = False U {DONT, LIKE, DONE}
