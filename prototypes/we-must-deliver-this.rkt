@@ -15,6 +15,9 @@ exec /Users/matthias/plt/racket/bin/racket -tm "$0" ${1+"$@"}
 
 (require 2htdp/image 2htdp/universe)
 
+;; to avoid portability problems with exec  privileges 
+(require compiler/find-exe)
+
 ;; ---------------------------------------------------------------------------------------------------
 (define DONT #;(scale .33 (bitmap "dont.png")) "I don't like it")
 (define LIKE #;(scale .33 (bitmap "like.png")) "I like it")
@@ -30,11 +33,21 @@ exec /Users/matthias/plt/racket/bin/racket -tm "$0" ${1+"$@"}
 (define (play-sound mp3)
   (define custodian (make-custodian))
   (parameterize ((current-custodian custodian))
+    ;; on Mac and Unix, the following would work if this file's exec bit is set:
+    #;
     (match-define (list in out _proc-id _err status) (process* play-server))
+    ;; but who knows what the packaging does and what Windows does, so I am going with this: 
+    (match-define (list in out _proc-id _err status) (process* (find-exe) "-t" play-server "-m"))
     (parameterize ([current-output-port out]
                    [current-input-port  in])
+
+      (debug "ready")
+
       (file mp3)
       (play)
+
+      (debug "playing")
+      
       (begin0
         (parameterize ((current-eventspace (make-eventspace)))
           (retrieve-result))
@@ -120,8 +133,9 @@ exec /Users/matthias/plt/racket/bin/racket -tm "$0" ${1+"$@"}
 ;; EFFECT manage an MP3 player as a separate process via STDIN/STDOUT 
 ;; ASSUME main is run in a separate process 
 (define (main [current-vps #f])
+  (debug "starting")
   (define command (read))
-
+  (debug command)
   (unless (eof-object? command)
     (case command
       [(exit:) (void)]
@@ -164,6 +178,12 @@ exec /Users/matthias/plt/racket/bin/racket -tm "$0" ${1+"$@"}
 (define kill (transmit 'kill:))
 (define stopped? (compose receive (transmit 'done:)))
 
+(define (debug s)
+  (void)
+  #;
+  (message-box "DEBUGGING" (format "~a" s)))
+
+
 ;; ---------------------------------------------------------------------------------------------------
 (module+ test
   (play-sound (file->bytes MP3-short))
@@ -174,3 +194,4 @@ exec /Users/matthias/plt/racket/bin/racket -tm "$0" ${1+"$@"}
   (define input-string (format "file:\n~s\nplay:\n" (path->string MP3-short)))
   (parameterize ([current-input-port (open-input-string input-string)])
     (main)))
+
