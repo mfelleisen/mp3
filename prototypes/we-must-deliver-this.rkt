@@ -9,99 +9,115 @@ exec /Users/matthias/plt/racket/bin/racket -tm "$0" ${1+"$@"}
 ;; at the pace of the regular schedue; they should do it so they don't think this is black magic 
 
 (provide
- ;; ByteString -> State
+ ;; ByteString -> RESPONSE
  (contract-out
-  [play-sound (-> bytes? response?)]))
-
-(require 2htdp/image 2htdp/universe)
-
-;; to avoid portability problems with exec  privileges 
-(require compiler/find-exe)
+  [play-sound (-> bytes? response?)]
+  [response?  (-> any/c boolean?)]
+  [DONT       string?]
+  [LIKE       string?]
+  [DONE       string?]))
 
 ;; ---------------------------------------------------------------------------------------------------
-(define DONT #;(scale .33 (bitmap "dont.png")) "I don't like it")
-(define LIKE #;(scale .33 (bitmap "like.png")) "I like it")
-(define DONE "song completed")
+;; dependencies 
+(require 2htdp/image 2htdp/universe)
 
-;; type State = False U {DONT, LIKE, DONE}
+;; ---------------------------------------------------------------------------------------------------
+;; implementation 
 
-;; Any -> Boolean
-;; a response is a State 
+(define DONT "I don't like it")
+(define LIKE "I like it")
+(define DONE "song completed without feedback")
+;; type Response = 
+;;  | DONT     ;; feedback has been provided
+;;  | LIKE     ;; feedback has been provided
+;;  | DONE     ;; the song is over, no feedback 
+
 (define (response? x)
-  (or (false? x) (memq x (list DONT LIKE DONE))))
+  (memq x (list DONT LIKE DONE)))
 
 (define (play-sound mp3)
   (define custodian (make-custodian))
   (parameterize ((current-custodian custodian))
-    ;; on Mac and Unix, the following would work if this file's exec bit is set:
-    #;
-    (match-define (list in out _proc-id _err status) (process* play-server))
-    ;; but who knows what the packaging does and what Windows does, so I am going with this: 
-    (match-define (list in out _proc-id _err status) (process* (find-exe) "-t" play-server "-m"))
-    (parameterize ([current-output-port out]
-                   [current-input-port  in])
+    (parameterize ((current-eventspace (make-eventspace)))
+      (define vps (mp3->vps mp3))
+      (send vps play)
+      (define stateN (retrieve-result vps))
+      (send vps stop)
+      (custodian-shutdown-all custodian)
+      (cond
+        [(false? stateN)  DONE]
+        [(symbol? stateN) DONE]
+        [else stateN]))))
 
-      (debug "ready")
-
-      (file mp3)
-      (play)
-
-      (debug "playing")
-      
-      (begin0
-        (parameterize ((current-eventspace (make-eventspace)))
-          (retrieve-result))
-        (stop)
-        (custodian-shutdown-all custodian)))))
+(define PAUSED 'paused)
+;; type State =
+;;  | False    ;; the song is playing, no feedback
+;;  | PAUSED   ;; the song is paused
+;;  U Response
 
 ;; -> State 
-(define (retrieve-result)
-  (define-values (gui callback-for-simulated-gui) (make-gui))
+(define (retrieve-result vps)
+  (define gui
+    (new gui%  ;; observe contractual obligations
+         [paused?  #false]
+         [cb-play  (λ (s) (unless (false? s)     (send vps play))  #false)]
+         [cb-pause (λ (s) (unless (eq? PAUSED s) (send vps pause)) PAUSED)]
+         [cb-like  (λ (_)                                          LIKE)]
+         [cb-dont  (λ (_)                                          DONT)]))
+
   (big-bang #f
-    [to-draw   (λ (s) gui)]
-    [on-tick   (λ (s) (if (and (boolean? s) (stopped?)) DONE s))]
-    [on-mouse  (λ (s x y me) (if (mouse=? me "button-down") (callback-for-simulated-gui s x y) s))]
-    [on-key    (λ (s ke) (if (key=? ke "q") DONT s))]
+    [to-draw   (λ (s) (send gui show (eq? PAUSED s)))]
+    [on-tick   (λ (s) (if (and (boolean? s) (send vps is-stopped?)) DONE s))]
+    [on-mouse  (λ (s x y me) (if (mouse=? me "button-down") ((send gui geometry-manager x y) s) s))]
     [stop-when string?]))
 
-;; -> (values Image [(X) (X N N -> X)])
-(define (make-gui)
+;; (X) (class [cb-play (X -> X)] [cb-pause (X -> X)] [cb-like (X -> X)] [cb-dont (X -> X)]
+;; produces 
+;; (object [show (Boolean -> Image)] [geometry-manager (N N -> (X -> X))])
+;; implement the primitive geometry management for buttons 
+(define gui%
+  (class object% (init paused? cb-play cb-pause cb-like cb-dont)
+    
+    ;; sizes and shapes 
+    (define WIDTH   100)
+    (define 2WIDTH  (* 2 WIDTH))
+    (define HEIGHT  50)
+    (define 2HEIGHT (* 2 HEIGHT))
+  
+    (define PLAY (scale .25 (bitmap "play.png")))
+    (define PAUS (scale .25 (bitmap "pause.png")))
+    (define LIKE (scale .25 (bitmap "like.png")))
+    (define DONT (scale .25 (bitmap "dont.png")))
+    
+    ;; <Image , (X) (X -> X) >
+    ;; generate images for buttons and callbacks 
+    (define-values (play-button play-clicked) (button 0     2WIDTH 0      HEIGHT  PLAY cb-play))
+    (define-values (paus-button paus-clicked) (button 0     2WIDTH 0      HEIGHT  PAUS cb-pause))
+    (define-values (like-button like-clicked) (button 0     WIDTH  HEIGHT 2HEIGHT LIKE cb-like))
+    (define-values (dont-button dont-clicked) (button WIDTH 2WIDTH HEIGHT 2HEIGHT DONT cb-dont))
 
-  ;; sizes and shapes 
-  (define WIDTH   100)
-  (define 2WIDTH  (* 2 WIDTH))
-  (define HEIGHT  50)
-  (define 2HEIGHT (* 2 HEIGHT))
-  (define PLAY    (rotate -90 (triangle 10 'solid 'green)))
-  (define STOP    (square 10 'solid 'red))
+    (field [xyz-clicked #false])
 
-  ;; (X) (X -> X)
-  ;; compute next X from given X (and contextual knowledge of what triggers this callback) 
-  ;; EFFECT may ask the MP3 player to stop or resume play 
-  ;; actions 
-  (define (do-play s) (unless (eq? 'playing s) (play)) 'playing)
-  (define (do-stop s) (unless (eq? 'paused s) (stop))   DONT)
-  (define (do-like s) LIKE)
-  (define (do-dont s) DONT)
+    (define/public (show paused?)
+      (cond
+        [paused?
+         (set! xyz-clicked play-clicked)
+         (above play-button
+                (beside like-button dont-button))]
+        [else
+         (set! xyz-clicked paus-clicked)
+         (above paus-button
+                (beside like-button dont-button))]))
 
-  ;; <Image , (X) (X -> X) >
-  ;; generate images for buttons and callbacks 
-  (define-values (play-button play-clicked) (button 0 WIDTH 0 HEIGHT PLAY do-play))
-  (define-values (stop-button stop-clicked) (button 0 2WIDTH 0 HEIGHT STOP do-stop))
-  (define-values (like-button like-clicked) (button 0 WIDTH HEIGHT 2HEIGHT LIKE do-like))
-  (define-values (dont-button dont-clicked) (button WIDTH 2WIDTH HEIGHT 2HEIGHT DONT do-dont))
-  (define BACK (above stop-button (beside like-button dont-button)))
+    ;; (N N -> (x -> X)
+    ;; figure out which of the callbacks may fire, fire it and compute next X 
+    (define/public (geometry-manager x y)
+      (or (xyz-clicked x y)
+          (like-clicked x y)
+          (dont-clicked x y)))
 
-  ;; (X) (X N N -> X)
-  ;; figure out which of the callbacks may fire, fire it and compute next X 
-  (define (callback-for-simulated-gui s x y)
-    (or ; (play-clicked s x y)
-     (stop-clicked s x y)
-     (like-clicked s x y)
-     (dont-clicked s x y)
-     (error 'play-sound "can't happen ~e" (cons x y))))
-
-  (values BACK callback-for-simulated-gui))
+    (super-new)
+    (show paused?)))
 
 ;; (X Y) (N N (String U Image) X -> (values Image (Y N N -> X U False)))
 ;; generate "buttons" for simulated hierarchical GUI within big-bang 
@@ -110,9 +126,9 @@ exec /Users/matthias/plt/racket/bin/racket -tm "$0" ${1+"$@"}
                 (rectangle (- w-end w-start) (- h-end h-start) 'outline 'black)
                 (rectangle (- w-end w-start) (- h-end h-start) 'solid 'gray)))
   (define BUTT (overlay (if (image? label) label (text label 16 'red)) BACK))
-  (define (clicked? s x y)
+  (define (clicked? x y)
     (if (and (< w-start x w-end) (< h-start y h-end))
-        (status s)
+        status
         #f))
   (values BUTT clicked?))
 
@@ -120,72 +136,25 @@ exec /Users/matthias/plt/racket/bin/racket -tm "$0" ${1+"$@"}
 ;; ---------------------------------------------------------------------------------------------------
 ;; this second part is included only so that we get a single-file package 
 
-(provide main)
-
 (require (except-in video/base color) video/player)
-(require racket/runtime-path)
 
-(define-runtime-path play-server (syntax-source #'here))
-(define-runtime-path MP3-long  "../long.mp3")
-(define-runtime-path MP3-short "../short.mp3")
-
-;; -> Void
-;; EFFECT manage an MP3 player as a separate process via STDIN/STDOUT 
-;; ASSUME main is run in a separate process 
-(define (main [current-vps #f])
-  (debug "starting")
-  (define command (read))
-  (debug command)
-  (unless (eof-object? command)
-    (case command
-      [(exit:) (void)]
-      [(file:) (main (file-and-clip (read)))]
-      [(play:) (send current-vps play) (main current-vps)]
-      [(stop:) (send current-vps stop) (main current-vps)]
-      [(done:) (writeln (send current-vps is-stopped?))
-               (flush-output)
-               (main current-vps)]
-      [else (log-error (format "playserver: not a valid command: ~a" command))
-            (main current-vps)])))
-
-(define (file-and-clip file)
+(define (mp3->vps mp3)
+  (define file-path (make-temporary-file))
+  (with-output-to-file file-path #:exists 'replace (lambda () (write-bytes mp3)))
+  (define file (path->string file-path))
   (define my-clip (clip file #:filters (list (mux-filter #:type 'a #:index 0))))
   (define frame   (new frame% [label ""]))
   (define vc      (new video-canvas% [parent frame] [width 640] [height 480]))
   (define vps     (new video-player-server% [video my-clip] #;[canvas vc])) ;; <-- would be nice
-
   (send vps set-canvas vc)
   (send vps render-video #f)
-
-  ; (send frame show #t)
   vps)
-
-(define ((transmit token))
-  (writeln token)
-  (flush-output))
-
-(define (receive _)
-  (read))
-
-(define (file mp3)
-  (define file-path (make-temporary-file))
-  (with-output-to-file file-path #:exists 'replace (lambda () (write-bytes mp3)))
-  ((transmit 'file:))
-  ((transmit (path->string file-path))))
-
-(define play (transmit 'play:))
-(define stop (transmit 'stop:))
-(define kill (transmit 'kill:))
-(define stopped? (compose receive (transmit 'done:)))
-
-(define (debug s)
-  (void)
-  #;
-  (message-box "DEBUGGING" (format "~a" s)))
-
 
 ;; ---------------------------------------------------------------------------------------------------
 (module+ test
+  (require racket/runtime-path)
+  (define-runtime-path MP3-long  "../long.mp3")
+  (define-runtime-path MP3-short "../short.mp3")
   (play-sound (file->bytes MP3-short))
   (play-sound (file->bytes MP3-long)))
 
