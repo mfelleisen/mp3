@@ -16,6 +16,8 @@ raco pkg install video-unstable
 
 ## Files and Directories 
 
+- mp3-tags.rkt : a (brittle) approach to extracting basic tags from MP3 files
+
 - prototypes
   - we-must-deliver-this : provide a function for playing/pausing an mp3
     byte string and delivering a string as a response 
@@ -25,7 +27,15 @@ raco pkg install video-unstable
   - students-can-write-this : this file shows how students would write an
     mp3 client that receives a song, plays it, and gets an opinion 
 
-Run as follows from the command line (or in 2 drracket windows): 
+
+## Running Programs 
+
+```
+$ pwd
+../mp3/
+$ ./mp3-tags.rkt long.mp3
+```
+This delivers four pieces of information (title, artist, album, year/optional).
 
 ```
 $ pwd 
