@@ -9,13 +9,23 @@ exec /Users/matthias/plt/racket/bin/racket -tm "$0" ${1+"$@"}
 ;; at the pace of the regular schedue; they should do it so they don't think this is black magic 
 
 (provide
- ;; ByteString -> RESPONSE
+
+ file->bytes 
+ 
  (contract-out
-  [play-sound (-> bytes? response?)]
+
+  ;; playing mp3 bytes to get feedback 
   [response?  (-> any/c boolean?)]
+  [play-sound (-> bytes? response?)]
   [DONT       string?]
   [LIKE       string?]
-  [DONE       string?]))
+  [DONE       string?]
+
+ ;; the following suggests that transmitted songs are structures 
+  [song?             (-> any/c boolean?)]
+  [make-song-bytes   (-> string? bytes? song?)]
+  [song-bytes-title  (-> song? string?)]
+  [song-bytes-mp3    (-> song? bytes?)]))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; dependencies 
@@ -169,15 +179,6 @@ exec /Users/matthias/plt/racket/bin/racket -tm "$0" ${1+"$@"}
     (main)))
 
 ;; ---------------------------------------------------------------------------------------------------
-
-(provide
-
- ;; the following suggests that transmitted songs are structures 
- (contract-out
-  [song?             (-> any/c boolean?)]
-  [make-song-bytes   (-> string? bytes? song?)]
-  [song-bytes-title  (-> song? string?)]
-  [song-bytes-mp3    (-> song? bytes?)]))
 
 (define SEPARATOR  #"|") ;; one byte that is unlikely to occur in song titles 
 (define SONG+TITLE (byte-regexp (bytes-append #"(.*?)\\" SEPARATOR #"(.*)")))
