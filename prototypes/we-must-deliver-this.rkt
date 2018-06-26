@@ -21,6 +21,9 @@ exec /Users/matthias/plt/racket/bin/racket -tm "$0" ${1+"$@"}
 ;; dependencies 
 (require 2htdp/image 2htdp/universe)
 
+(module+ test
+  (require rackunit))
+
 ;; ---------------------------------------------------------------------------------------------------
 ;; implementation 
 
@@ -151,6 +154,7 @@ exec /Users/matthias/plt/racket/bin/racket -tm "$0" ${1+"$@"}
   vps)
 
 ;; ---------------------------------------------------------------------------------------------------
+#;
 (module+ test
   (require racket/runtime-path)
   (define-runtime-path MP3-long  "../long.mp3")
@@ -164,3 +168,50 @@ exec /Users/matthias/plt/racket/bin/racket -tm "$0" ${1+"$@"}
   (parameterize ([current-input-port (open-input-string input-string)])
     (main)))
 
+;; ---------------------------------------------------------------------------------------------------
+
+(provide
+
+ ;; the following suggests that transmitted songs are structures 
+ (contract-out
+  [song?             (-> any/c boolean?)]
+  [make-song-bytes   (-> string? bytes? song?)]
+  [song-bytes-title  (-> song? string?)]
+  [song-bytes-mp3    (-> song? bytes?)]))
+
+(define SEPARATOR  #"|") ;; one byte that is unlikely to occur in song titles 
+(define SONG+TITLE (byte-regexp (bytes-append #"(.*?)\\" SEPARATOR #"(.*)")))
+(define GOOD-TITLE (byte-regexp (bytes-append #"\\" SEPARATOR)))
+
+(define song? bytes?)
+
+(module+ test (check-equal? (make-song-bytes "a" #"b") #"a|b"))
+(module+ test (check-exn exn:fail? (lambda () (make-song-bytes "a|" #"b"))))
+(define (make-song-bytes t:str s)
+  (define t:byt (string->bytes/utf-8 t:str))
+  (unless (good-title? t:byt)
+    (error 'title+song "title contains ~e" SEPARATOR))
+  (bytes-append t:byt SEPARATOR s))
+
+(module+ test (check-equal? (song-bytes-title (make-song-bytes "a" #"b")) "a"))
+(define (song-bytes-title s) (first (song-bytes->both 'song-bytes-title s)))
+
+(module+ test (check-equal? (song-bytes-mp3 (make-song-bytes "a" #"b")) #"b"))
+(define (song-bytes-mp3 s) (second (song-bytes->both 'song-bytes-mp3 s)))
+
+;; Bytes -> Boolean
+(module+ test
+  (check-true  (good-title? #"a"))
+  (check-false (good-title? #"b|c")))
+(define (good-title? t)
+  (not (regexp-match GOOD-TITLE t)))
+
+;; Symbol Bytes -> [List String Bytes]
+(module+ test (check-equal? (song-bytes->both 'name (make-song-bytes "a" #"b")) (list "a" #"b")))
+(module+ test (check-equal? (song-bytes->both 'name (make-song-bytes "a" #"b|c")) (list "a" #"b|c")))
+(define (song-bytes->both name t+s)
+  (define m (regexp-match SONG+TITLE t+s))
+  (unless m
+    (error name "not a song-message"))
+  (match-define (list _all title song) m)
+  (list (bytes->string/utf-8 title) song))
