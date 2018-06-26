@@ -9,7 +9,7 @@
   (big-bang #false
     [register   LOCALHOST]
     [to-draw    show]
-    [on-receive (λ (w msg) (make-package (play-sound msg) 'next))]))
+    [on-receive (λ (w msg) (make-package (play-sound (song-bytes-mp3 msg)) 'next))]))
 
 (define (show w)
   (if (boolean? w) (text "waiting... waiting... waiting..." 22 "red") (text w 22 "black")))
