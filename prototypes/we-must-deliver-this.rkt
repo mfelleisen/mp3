@@ -21,7 +21,9 @@ exec /Users/matthias/plt/racket/bin/racket -tm "$0" ${1+"$@"}
   [LIKE       string?]
   [DONE       string?]
 
- ;; the following suggests that transmitted songs are structures 
+  ;; the following suggests that transmitted songs are structures
+  ;; but they are byte strings and if they play the whole thing before
+  ;; stripping the title, it also plays a song right now 
   [song?             (-> any/c boolean?)]
   [make-song-bytes   (-> string? bytes? song?)]
   [song-bytes-title  (-> song? string?)]
