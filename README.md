@@ -34,8 +34,18 @@ raco pkg install video-unstable
 $ pwd
 ../mp3/
 $ ./mp3-tags.rkt long.mp3
+"Liebestraum No.3"
+"Franz Liszt"
+"www.mfiles.co.uk"
+#f
+$ ./mp3-tags.rkt short.mp3
+"Test of MP3 File"
+"Me"
+"Me"
+2006
 ```
 This delivers four pieces of information (title, artist, album, year/optional).
+
 
 ```
 $ pwd 
@@ -44,7 +54,7 @@ $ racket our-server.rkt &
 $ racket students-can-write-this.rkt 
 ```
 This pops up a server window and two client windows per song. It plays the
-following two. 
+following two mp3 files:
 
 - short.mp3: 10s sample mp3
 - long.mp3: 3min sample mp3
